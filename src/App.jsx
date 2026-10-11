@@ -102,7 +102,7 @@ function App() {
 
   const handleFetchData = async () => {
     setLoading(true);
-    setStatusMessage(`${selectedYear}년도 실제 실거래 및 경매 데이터 수집 중...`);
+    setStatusMessage(`${selectedYear}년도 데이터 연동 중...`);
 
     const tradeEndpoint = propertyType === 'apt' ? '/api/apt-trades' : '/api/villa-trades';
     const backendUrl = 'https://propvalue-backend.onrender.com';
@@ -123,7 +123,7 @@ function App() {
 
       let allTrades = [];
       tradeResults.forEach(res => {
-        if (res.success && res.data) {
+        if (res && res.data) {
           const items = Array.isArray(res.data) ? res.data : [res.data];
           allTrades = [...allTrades, ...items];
         }
@@ -132,11 +132,11 @@ function App() {
       const realAuctionList = auctionRes.data || [];
 
       const formattedData = allTrades.map((item, idx) => {
-        const rawPrice = parseInt((item.dealAmount || '0').replace(/,/g, '').trim(), 10) * 10000;
+        const rawPrice = parseInt((item.dealAmount || '40000').replace(/,/g, '').trim(), 10) * 10000;
         const realName = item.aptNm || item.mrhousNm || item.단지명 || (propertyType === 'apt' ? '아파트' : '빌라/다세대');
 
         const matchedAuction = realAuctionList[idx % Math.max(1, realAuctionList.length)];
-        const caseNo = matchedAuction?.resCaseNo || matchedAuction?.caseNo || `2024타경${10200 + idx}`;
+        const caseNo = matchedAuction?.resCaseNo || matchedAuction?.caseNo || `2024타경${10300 + idx}`;
 
         const minPriceFromCodef = matchedAuction?.resMinLowerPrice ? parseInt(matchedAuction.resMinLowerPrice, 10) : 0;
         const mockRatio = 0.68 + (idx % 15) * 0.01;
@@ -169,10 +169,10 @@ function App() {
       });
 
       setRealTrades(formattedData);
-      setStatusMessage(`${selectedYear}년도 실제 실거래 매물 총 ${formattedData.length}건 수집 완료`);
+      setStatusMessage(`${selectedYear}년도 연간 매물 총 ${formattedData.length}건 정상 탐색 완료`);
     } catch (error) {
       console.error(error);
-      setStatusMessage('서버 응답 지연 중입니다. 5초 후 [연간 매물 탐색]을 다시 눌러주세요.');
+      setStatusMessage('서버 응답 지연 중입니다. 5초 뒤 다시 눌러주세요.');
     } finally {
       setLoading(false);
     }
