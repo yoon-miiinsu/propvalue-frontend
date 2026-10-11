@@ -19,7 +19,7 @@ function App() {
     setLoading(true);
     setStatusMessage('국토교통부 API 데이터 수신 중...');
     try {
-      const response = await fetch(`https://propvalue-backend.onrender.com/api/apt-trades?...`)
+      const response = await fetch(`https://propvalue-backend.onrender.com/api/apt-trades?lawdCd=${selectedRegion}&dealYmd=${dealYmd}`);
       const result = await response.json();
 
       if (result.success && result.data) {
@@ -55,7 +55,7 @@ function App() {
       }
     } catch (error) {
       console.error(error);
-      setStatusMessage('백엔드 서버(node server.js) 통신 에러! 서버 실행 여부를 확인하세요.');
+      setStatusMessage('백엔드 서버 통신 에러! 서버 상태를 확인하세요.');
     } finally {
       setLoading(false);
     }
@@ -229,92 +229,4 @@ function App() {
                 </div>
 
                 <h3 className="text-base font-bold text-white mb-1">{item.name}</h3>
-                <p className="text-xs text-slate-400 mb-4">{item.address} · 전용 {item.area}㎡</p>
-
-                <div className="bg-[#090d16] p-3.5 rounded-xl border border-slate-800/80 space-y-2 mb-4 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">⚡ 경매 낙찰가</span>
-                    <span className="font-bold text-amber-400">{(item.auctionPrice / 100000000).toFixed(2)}억원</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">🏢 최근 찍힌 실거래가</span>
-                    <span className="font-bold text-emerald-400">{(item.dealPrice / 100000000).toFixed(2)}억원</span>
-                  </div>
-                  <div className="border-t border-slate-800/80 pt-2 flex justify-between">
-                    <span className="text-slate-400">낙찰 시점 시세 차익</span>
-                    <span className="font-extrabold text-blue-400">+{(item.profit / 100000000).toFixed(2)}억원 (+{item.profitRate}%)</span>
-                  </div>
-                </div>
-              </div>
-
-              <button 
-                onClick={() => setSelectedItem(item)}
-                className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold py-2 rounded-xl text-xs transition border border-slate-700"
-              >
-                상세 경매 & 실거래 내역 보기
-              </button>
-            </div>
-          ))
-        ) : (
-          <div className="col-span-full text-center py-20 bg-[#111827] rounded-2xl border border-slate-800">
-            <Building2 className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-            <p className="text-slate-300 font-bold text-sm">조회된 실거래 데이터가 없습니다.</p>
-            <p className="text-xs text-slate-500 mt-1">상단의 [국토부 실거래가 연동 호출] 버튼을 누르시면 매물이 표시됩니다.</p>
-          </div>
-        )}
-      </div>
-
-      {/* 5. 상세 모달 */}
-      {selectedItem && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-[#111827] border border-slate-800 rounded-2xl p-6 max-w-md w-full shadow-2xl relative">
-            <button 
-              onClick={() => setSelectedItem(null)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-white"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <h3 className="text-lg font-bold text-white mb-0.5">{selectedItem.name}</h3>
-            <p className="text-xs text-slate-400 mb-5">{selectedItem.address}</p>
-
-            <div className="bg-[#090d16] p-4 rounded-xl border border-slate-800 space-y-2 mb-5 text-xs">
-              <div className="flex justify-between">
-                <span className="text-slate-400">사건번호</span>
-                <span className="font-bold text-amber-400">{selectedItem.caseNo}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">낙찰 일자</span>
-                <span className="text-slate-200">{selectedItem.auctionDate}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">실거래 등록일</span>
-                <span className="text-slate-200">{selectedItem.dealDate} ({selectedItem.monthsToSell}개월 소요)</span>
-              </div>
-            </div>
-
-            <div className="bg-blue-950/60 border border-blue-800/60 p-4 rounded-xl flex justify-between items-center mb-5">
-              <div>
-                <p className="text-[11px] text-blue-300">최종 수익률</p>
-                <p className="text-2xl font-black text-blue-400">+{selectedItem.profitRate}%</p>
-              </div>
-              <div className="text-right">
-                <p className="text-[11px] text-blue-300">확정 시세 차익</p>
-                <p className="text-lg font-bold text-emerald-400">+{(selectedItem.profit / 100000000).toFixed(2)}억원</p>
-              </div>
-            </div>
-
-            <button 
-              onClick={() => setSelectedItem(null)}
-              className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-xl text-xs transition"
-            >
-              닫기
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-export default App;
+                <p className="text-xs text-slate-400 mb-4">{item.address} ·
