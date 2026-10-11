@@ -102,7 +102,7 @@ function App() {
 
   const handleFetchData = async () => {
     setLoading(true);
-    setStatusMessage(`CODEF 실시간 경매 및 국토부 실거래 데이터 탐색 중...`);
+    setStatusMessage(`${selectedYear}년도 실제 실거래 및 경매 데이터 수집 중...`);
 
     const tradeEndpoint = propertyType === 'apt' ? '/api/apt-trades' : '/api/villa-trades';
     const backendUrl = 'https://propvalue-backend.onrender.com';
@@ -111,7 +111,9 @@ function App() {
       const targetYmds = ['03', '06', '09', '11'].map(m => `${selectedYear}${m}`);
 
       const [auctionRes, ...tradeResults] = await Promise.all([
-        fetch(`${backendUrl}/api/codef-auction-real?regionCode=${selectedRegion}&buildingType=${propertyType}`).then(res => res.json()).catch(() => ({ data: [] })),
+        fetch(`${backendUrl}/api/codef-auction-real?regionCode=${selectedRegion}&buildingType=${propertyType}`)
+          .then(res => res.json())
+          .catch(() => ({ data: [] })),
         ...targetYmds.map(ymd => 
           fetch(`${backendUrl}${tradeEndpoint}?lawdCd=${selectedRegion}&dealYmd=${ymd}`)
             .then(res => res.json())
@@ -167,10 +169,10 @@ function App() {
       });
 
       setRealTrades(formattedData);
-      setStatusMessage(`${selectedYear}년도 실제 매물 총 ${formattedData.length}건 정상 수집 완료`);
+      setStatusMessage(`${selectedYear}년도 실제 실거래 매물 총 ${formattedData.length}건 수집 완료`);
     } catch (error) {
       console.error(error);
-      setStatusMessage('서버 통신 중 에러가 발생했습니다. 잠시 후 다시 시도해 주세요.');
+      setStatusMessage('서버 응답 지연 중입니다. 5초 후 [연간 매물 탐색]을 다시 눌러주세요.');
     } finally {
       setLoading(false);
     }
@@ -218,7 +220,7 @@ function App() {
     
     const regLabel = REGION_OPTIONS.find(r => r.code === selectedRegion)?.label || '수도권';
     link.href = url;
-    link.setAttribute('download', `PropValue_실제경매실거래추적_${regLabel}_${selectedYear}년.csv`);
+    link.setAttribute('download', `PropValue_경매실거래추적_${regLabel}_${selectedYear}년.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -235,7 +237,7 @@ function App() {
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-extrabold text-white">PropValue</h1>
               <span className="bg-blue-950 text-blue-400 border border-blue-800 text-xs font-bold px-2.5 py-0.5 rounded-full">
-                CODEF 실시간 경매 연동 v3.0
+                수도권 경매&실거래 추적기 v3.0
               </span>
             </div>
             <p className="text-slate-400 text-xs mt-0.5">서울 · 경기 · 인천 CODEF 대법원 실시간 경매 및 실거래가 탐색</p>
@@ -358,7 +360,7 @@ function App() {
       <div className="bg-[#111827] rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
         <div className="p-4 border-b border-slate-800 flex flex-wrap justify-between items-center gap-3">
           <h3 className="text-sm font-bold text-slate-200">
-            📋 {selectedYear}년도 CODEF 경매 연동 매물 목록 ({filteredData.length}건)
+            📋 {selectedYear}년도 실거래 매물 목록 ({filteredData.length}건)
           </h3>
           <div className="flex items-center gap-3">
             <span className="text-xs text-slate-500 hidden sm:inline">행 클릭 시 상세 모달 보기</span>
