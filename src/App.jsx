@@ -19,7 +19,7 @@ function App() {
     setLoading(true);
     setStatusMessage('국토교통부 API 데이터 수신 중...');
     try {
-      const response = await fetch(`http://localhost:5000/api/apt-trades?lawdCd=${selectedRegion}&dealYmd=${dealYmd}`);
+      const response = await fetch(`https://propvalue-backend.onrender.com/api/apt-trades?...`)
       const result = await response.json();
 
       if (result.success && result.data) {
