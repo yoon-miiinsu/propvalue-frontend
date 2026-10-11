@@ -3,7 +3,6 @@ import {
   Building2, RefreshCw, Filter, X, TrendingUp, DollarSign, ChevronRight, Building
 } from 'lucide-react';
 
-// 수도권(서울, 경기, 인천) 주요 지역 법정동 코드 목록
 // 수도권(서울 전역 25개 구, 경기 전역 31개 시/군, 인천 전역 10개 구/군) 전수 목록
 const REGION_OPTIONS = [
   // ================= 서울특별시 (25개 자치구) =================
@@ -91,9 +90,9 @@ const REGION_OPTIONS = [
 ];
 
 function App() {
-  const [selectedRegion, setSelectedRegion] = useState('41135'); // 기본값: 성남 분당구
+  const [selectedRegion, setSelectedRegion] = useState('41117'); // 기본값: 수원시 영통구
   const [propertyType, setPropertyType] = useState('apt'); // 'apt' | 'villa'
-  const [dealYmd, setDealYmd] = useState('202503');
+  const [dealYmd, setDealYmd] = useState('202405'); // 데이터가 많은 시점 기본값 적용
   const [maxRatio, setMaxRatio] = useState(80);
   const [loading, setLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState('조건 설정 후 [실거래가 찍힌 경매 매물 탐색] 버튼을 누르세요.');
@@ -109,7 +108,6 @@ function App() {
     const backendUrl = 'https://propvalue-backend.onrender.com';
 
     try {
-      // 1. 국토부 실거래가 API 호출 & CODEF 모의 경매 API 동시에 호출
       const [tradeRes, auctionRes] = await Promise.all([
         fetch(`${backendUrl}${tradeEndpoint}?lawdCd=${selectedRegion}&dealYmd=${dealYmd}`),
         fetch(`${backendUrl}/api/codef-auction-mock?regionCode=${selectedRegion}&buildingType=${propertyType}`)
@@ -119,16 +117,19 @@ function App() {
       const auctionResult = await auctionRes.json();
 
       if (tradeResult.success && tradeResult.data) {
+        // 단일 객체({...})로 들어올 경우를 대비해 배열 형태 검증 방어 로직 추가
+        const rawTradeData = Array.isArray(tradeResult.data) 
+          ? tradeResult.data 
+          : [tradeResult.data];
+
         const mockAuctionList = auctionResult.data || [];
 
-        const formattedData = tradeResult.data.map((item, idx) => {
+        const formattedData = rawTradeData.map((item, idx) => {
           const rawPrice = parseInt((item.dealAmount || item.mdfyDeAmt || '0').replace(/,/g, '').trim(), 10) * 10000;
           
-          // CODEF 경매 데이터가 있으면 매칭하고, 없으면 패턴 적용
           const matchedAuction = mockAuctionList[idx % Math.max(1, mockAuctionList.length)];
           const caseNo = matchedAuction ? matchedAuction.resCaseNo : `2024타경${2000 + idx}`;
 
-          // 낙찰가 계산 (감정가 또는 실거래가 기반 추정)
           const mockRatio = 0.65 + (idx % 20) * 0.01;
           const auctionPrice = matchedAuction?.resMinLowerPrice 
             ? matchedAuction.resMinLowerPrice 
@@ -137,7 +138,6 @@ function App() {
           const ratioPercent = Math.round((auctionPrice / rawPrice) * 100);
           const profit = rawPrice - auctionPrice;
 
-          // KB 시세 추정 (~102%) & 공시가격 추정 (~68%)
           const kbPrice = Math.round(rawPrice * 1.02);
           const officialPrice = Math.round(rawPrice * 0.68);
 
@@ -164,11 +164,12 @@ function App() {
         setRealTrades(formattedData);
         setStatusMessage(`CODEF 경매 사건 및 실거래 데이터 총 ${formattedData.length}건 분석 완료`);
       } else {
-        setStatusMessage('데이터를 가져오지 못했습니다: ' + (tradeResult.message || tradeResult.error));
+        setRealTrades([]);
+        setStatusMessage('해당 조건에 일치하는 실거래 데이터가 없습니다.');
       }
     } catch (error) {
       console.error(error);
-      setStatusMessage('백엔드 서버 통신 에러! 서버 상태를 확인하세요.');
+      setStatusMessage('백엔드 서버 통신 에러! (서버가 깨어나는 중일 수 있으니 10초 후 재시도하세요)');
     } finally {
       setLoading(false);
     }
@@ -193,7 +194,7 @@ function App() {
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-extrabold text-white">PropValue</h1>
               <span className="bg-blue-950 text-blue-400 border border-blue-800 text-xs font-bold px-2.5 py-0.5 rounded-full">
-                수도권 경매&실거래 추적기
+                수도권 경매&실거래 추적기 2.0
               </span>
             </div>
             <p className="text-slate-400 text-xs mt-0.5">서울 · 경기 · 인천 CODEF 대법원 경매 및 실거래가 탐색</p>
@@ -275,7 +276,7 @@ function App() {
               type="text" 
               value={dealYmd} 
               onChange={(e) => setDealYmd(e.target.value)}
-              placeholder="예: 202503"
+              placeholder="예: 202405"
               className="w-full bg-[#090d16] border border-slate-700/80 text-slate-100 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-blue-500"
             />
           </div>
@@ -369,7 +370,7 @@ function App() {
           <div className="text-center py-16">
             <Building2 className="w-10 h-10 text-slate-600 mx-auto mb-2" />
             <p className="text-slate-400 text-sm font-semibold">조건에 일치하는 매물 데이터가 없습니다.</p>
-            <p className="text-xs text-slate-500 mt-1">상단 필터 조건에서 지역 및 연월을 변경해보세요.</p>
+            <p className="text-xs text-slate-500 mt-1">상단 필터 조건에서 조회 연월(예: 202405)이나 지역을 변경해보세요.</p>
           </div>
         )}
       </div>
