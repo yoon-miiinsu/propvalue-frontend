@@ -3,8 +3,9 @@ import {
   Building2, RefreshCw, Filter, X, TrendingUp, DollarSign, ChevronRight, Building, Download, Calendar
 } from 'lucide-react';
 
+// 수도권(서울, 경기, 인천) 전역 법정동 코드
 const REGION_OPTIONS = [
-  // 서울특별시
+  // ================= 서울특별시 =================
   { code: '11680', label: '서울 강남구' },
   { code: '11740', label: '서울 강동구' },
   { code: '11305', label: '서울 강북구' },
@@ -31,7 +32,7 @@ const REGION_OPTIONS = [
   { code: '11140', label: '서울 중구' },
   { code: '11260', label: '서울 중랑구' },
 
-  // 경기도
+  // ================= 경기도 =================
   { code: '41111', label: '경기 수원시 장안구' },
   { code: '41113', label: '경기 수원시 권선구' },
   { code: '41115', label: '경기 수원시 팔달구' },
@@ -75,7 +76,7 @@ const REGION_OPTIONS = [
   { code: '41820', label: '경기 가평군' },
   { code: '41830', label: '경기 양평군' },
 
-  // 인천광역시
+  // ================= 인천광역시 =================
   { code: '28110', label: '인천 중구' },
   { code: '28140', label: '인천 동구' },
   { code: '28177', label: '인천 미추홀구' },
@@ -91,60 +92,56 @@ const REGION_OPTIONS = [
 const YEAR_OPTIONS = ['2026', '2025', '2024', '2023', '2022'];
 
 function App() {
-  const [selectedRegion, setSelectedRegion] = useState('11320');
+  const [selectedRegion, setSelectedRegion] = useState('11320'); // 서울 도봉구
   const [propertyType, setPropertyType] = useState('apt');
-  const [selectedYear, setSelectedYear] = useState('2024');
+  const [selectedYear, setSelectedYear] = useState('2024'); // 데이터가 안정적인 2024년 기본값
   const [maxRatio, setMaxRatio] = useState(85);
   const [loading, setLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState('조건 설정 후 [연간 매물 탐색] 버튼을 누르세요.');
   const [realTrades, setRealTrades] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
 
+  // 선택한 년도(selectedYear)의 1월~12월 데이터를 실제로 각각 연동하여 수집하는 함수
   const handleFetchData = async () => {
     setLoading(true);
-    setStatusMessage(`${selectedYear}년도 실거래가 및 경매 통합 데이터 조회 중...`);
+    setStatusMessage(`${selectedYear}년도 1월~12월 전체 월별 국토부 실거래 데이터 수집 중...`);
 
     const tradeEndpoint = propertyType === 'apt' ? '/api/apt-trades' : '/api/villa-trades';
     const backendUrl = 'https://propvalue-backend.onrender.com';
 
     try {
-      const dealYmd = `${selectedYear}05`;
-      const [tradeRes, auctionRes] = await Promise.all([
-        fetch(`${backendUrl}${tradeEndpoint}?lawdCd=${selectedRegion}&dealYmd=${dealYmd}`),
-        fetch(`${backendUrl}/api/codef-auction-mock?regionCode=${selectedRegion}&buildingType=${propertyType}`)
+      // 1. 해당 연도의 1~12월 12개 월별 YYYYMM 배열 생성 (예: 202401 ~ 202412)
+      const months = Array.from({ length: 12 }, (_, i) => `${selectedYear}${String(i + 1).padStart(2, '0')}`);
+      
+      // 2. 12개 월별 실거래 API 요청 및 CODEF 모의 경매 API 동시 호출
+      const tradePromises = months.map(ymd => 
+        fetch(`${backendUrl}${tradeEndpoint}?lawdCd=${selectedRegion}&dealYmd=${ymd}`)
+          .then(res => res.json())
+          .catch(() => ({ success: false, data: [] }))
+      );
+
+      const [auctionRes, ...tradeResults] = await Promise.all([
+        fetch(`${backendUrl}/api/codef-auction-mock?regionCode=${selectedRegion}&buildingType=${propertyType}`).then(res => res.json()),
+        ...tradePromises
       ]);
 
-      const tradeResult = await tradeRes.json();
-      const auctionResult = await auctionRes.json();
+      // 3. 1~12월 수집 데이터 하나로 합치기
+      let allYearTrades = [];
+      tradeResults.forEach(res => {
+        if (res.success && res.data) {
+          const items = Array.isArray(res.data) ? res.data : [res.data];
+          allYearTrades = [...allYearTrades, ...items];
+        }
+      });
 
-      let targetData = tradeResult.data || [];
-      if (!Array.isArray(targetData)) {
-        targetData = targetData ? [targetData] : [];
-      }
+      const mockAuctionList = auctionRes.data || [];
 
-      // 국토부 데이터가 부족할 경우 실제 동네 이름을 반영한 매물 데이터 보완
-      if (targetData.length === 0) {
-        const regLabel = REGION_OPTIONS.find(r => r.code === selectedRegion)?.label || '해당 지역';
-        const districtName = regLabel.split(' ').slice(-1)[0];
-        
-        targetData = Array.from({ length: 12 }, (_, i) => ({
-          aptNm: `${districtName} ${propertyType === 'apt' ? '아이파크' : '빌라'} ${i + 1}단지`,
-          dealAmount: `${(42000 + i * 2800).toLocaleString()}`,
-          floor: 2 + i,
-          excluUseAr: 84.9 + (i % 3) * 10,
-          umdNm: regLabel,
-          jibun: `${10 + i}`,
-          dealYear: selectedYear,
-          dealMonth: String((i % 12) + 1).padStart(2, '0'),
-          dealDay: '15'
-        }));
-      }
-
-      const mockAuctionList = auctionResult.data || [];
-
-      const formattedData = targetData.map((item, idx) => {
+      // 4. 국토부 실제 단지명 필드 추출 가공 (가상 대체명 없음)
+      const formattedData = allYearTrades.map((item, idx) => {
         const rawPrice = parseInt((item.dealAmount || '0').replace(/,/g, '').trim(), 10) * 10000;
-        const realBuildingName = item.aptNm || item.mrhousNm || item.단지명 || (propertyType === 'apt' ? '아파트' : '빌라/다세대');
+        
+        // 국토부 실제 단지명 추출 (아파트: aptNm, 빌라/다세대: mrhousNm)
+        const realName = item.aptNm || item.mrhousNm || item.단지명 || (propertyType === 'apt' ? '아파트' : '빌라/다세대');
 
         const matchedAuction = mockAuctionList[idx % Math.max(1, mockAuctionList.length)];
         const caseNo = matchedAuction ? matchedAuction.resCaseNo : `2024타경${3000 + idx}`;
@@ -157,14 +154,14 @@ function App() {
         const ratioPercent = Math.round((auctionPrice / rawPrice) * 100);
         const profit = rawPrice - auctionPrice;
 
-        const dealMonth = String(item.dealMonth || ((idx % 12) + 1)).padStart(2, '0');
+        const dealMonth = String(item.dealMonth || '01').padStart(2, '0');
         const dealDay = String(item.dealDay || '15').padStart(2, '0');
         const dealYear = item.dealYear || selectedYear;
 
         return {
           id: `trade-${idx}`,
           caseNo: caseNo,
-          name: `${realBuildingName} ${item.floor || 3}층`,
+          name: `${realName} ${item.floor || 3}층`,
           type: propertyType === 'apt' ? '아파트' : '빌라/다세대',
           address: `${item.umdNm || item.legalDong || ''} ${item.jibun || ''}`,
           area: parseFloat(item.excluUseAr || item.mdfyExcluUseAr || 84.9),
@@ -181,7 +178,7 @@ function App() {
       });
 
       setRealTrades(formattedData);
-      setStatusMessage(`${selectedYear}년도 매물 총 ${formattedData.length}건 검색 완료`);
+      setStatusMessage(`${selectedYear}년도 실제 실거래 매물 총 ${formattedData.length}건 수집 완료`);
     } catch (error) {
       console.error(error);
       setStatusMessage('백엔드 서버 통신 에러! (Render 서버 가동 대기 중)');
