@@ -89,29 +89,26 @@ const REGION_OPTIONS = [
   { code: '28720', label: '인천 옹진군' },
 ];
 
-// 선택 가능한 년도 목록
 const YEAR_OPTIONS = ['2026', '2025', '2024', '2023', '2022'];
 
 function App() {
-  const [selectedRegion, setSelectedRegion] = useState('41117');
+  const [selectedRegion, setSelectedRegion] = useState('11320'); // 기본값: 서울 도봉구
   const [propertyType, setPropertyType] = useState('apt');
-  const [selectedYear, setSelectedYear] = useState('2025'); // 년도 선택 기본값: 2025년
+  const [selectedYear, setSelectedYear] = useState('2024'); // 기본값: 데이터 유의미한 2024년
   const [maxRatio, setMaxRatio] = useState(85);
   const [loading, setLoading] = useState(false);
-  const [statusMessage, setStatusMessage] = useState('조건 설정 후 [실거래가 찍힌 경매 매물 탐색] 버튼을 누르세요.');
+  const [statusMessage, setStatusMessage] = useState('조건 설정 후 [연간 매물 탐색] 버튼을 누르세요.');
   const [realTrades, setRealTrades] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
 
-  // 데이터 연동 (선택 년도의 연간 데이터 탐색)
   const handleFetchData = async () => {
     setLoading(true);
-    setStatusMessage(`${selectedYear}년 전체 월별 CODEF 경매 및 실거래가 통합 조회 중...`);
+    setStatusMessage(`${selectedYear}년도 실거래가 및 경매 통합 데이터 조회 중...`);
 
     const tradeEndpoint = propertyType === 'apt' ? '/api/apt-trades' : '/api/villa-trades';
     const backendUrl = 'https://propvalue-backend.onrender.com';
 
     try {
-      // 대표 연월(예: YYYY05) 및 연간 거래 패턴 데이터 수집
       const dealYmd = `${selectedYear}05`;
       const [tradeRes, auctionRes] = await Promise.all([
         fetch(`${backendUrl}${tradeEndpoint}?lawdCd=${selectedRegion}&dealYmd=${dealYmd}`),
@@ -126,31 +123,15 @@ function App() {
         targetData = targetData ? [targetData] : [];
       }
 
-      // 국토부 데이터가 없거나 부족할 시, 12개월 전수 분포 매물 가상 매칭
-      if (targetData.length < 12) {
-        const regLabel = REGION_OPTIONS.find(r => r.code === selectedRegion)?.label || '해당 지역';
-        targetData = Array.from({ length: 16 }, (_, i) => {
-          const monthNum = (i % 12) + 1;
-          const monthStr = String(monthNum).padStart(2, '0');
-          return {
-            aptNm: `${regLabel.split(' ').slice(-1)[0]} Central ${propertyType === 'apt' ? '아파트' : '빌라'} ${i + 1}차`,
-            dealAmount: `${(45000 + (i % 8) * 3200).toLocaleString()}`,
-            floor: 3 + (i % 10) * 2,
-            excluUseAr: 84.9 + (i % 3) * 10,
-            umdNm: regLabel,
-            jibun: `${100 + i}`,
-            dealYear: selectedYear,
-            dealMonth: monthStr,
-            dealDay: String(10 + (i % 18)).padStart(2, '0')
-          };
-        });
-      }
-
       const mockAuctionList = auctionResult.data || [];
 
+      // 실제 국토부 실거래 데이터 필드 매칭 (가상 Central 이름 전체 제거)
       const formattedData = targetData.map((item, idx) => {
         const rawPrice = parseInt((item.dealAmount || '0').replace(/,/g, '').trim(), 10) * 10000;
         
+        // 국토부 실제 단지명 (아파트: aptNm, 빌라/다세대: mrhousNm)
+        const realBuildingName = item.aptNm || item.mrhousNm || item.단지명 || (propertyType === 'apt' ? '아파트' : '빌라/다세대');
+
         const matchedAuction = mockAuctionList[idx % Math.max(1, mockAuctionList.length)];
         const caseNo = matchedAuction ? matchedAuction.resCaseNo : `2024타경${3000 + idx}`;
 
@@ -162,11 +143,6 @@ function App() {
         const ratioPercent = Math.round((auctionPrice / rawPrice) * 100);
         const profit = rawPrice - auctionPrice;
 
-        const kbPrice = Math.round(rawPrice * 1.02);
-        const officialPrice = Math.round(rawPrice * 0.68);
-
-        const itemName = item.aptNm || item.mrhousNm || (propertyType === 'apt' ? '아파트' : '빌라/다세대');
-
         const dealMonth = String(item.dealMonth || ((idx % 12) + 1)).padStart(2, '0');
         const dealDay = String(item.dealDay || '15').padStart(2, '0');
         const dealYear = item.dealYear || selectedYear;
@@ -174,27 +150,27 @@ function App() {
         return {
           id: `trade-${idx}`,
           caseNo: caseNo,
-          name: `${itemName} ${item.floor || 3}층`,
+          name: `${realBuildingName} ${item.floor || 3}층`,
           type: propertyType === 'apt' ? '아파트' : '빌라/다세대',
-          address: `${item.umdNm || ''} ${item.jibun || ''}`,
-          area: parseFloat(item.excluUseAr || 84.9),
+          address: `${item.umdNm || item.legalDong || ''} ${item.jibun || ''}`,
+          area: parseFloat(item.excluUseAr || item.mdfyExcluUseAr || 84.9),
           dealPrice: rawPrice,
           auctionPrice: auctionPrice,
           ratio: ratioPercent,
           profit: profit,
           profitRate: Math.round((profit / auctionPrice) * 100),
-          kbPrice: kbPrice,
-          officialPrice: officialPrice,
+          kbPrice: Math.round(rawPrice * 1.02),
+          officialPrice: Math.round(rawPrice * 0.68),
           dealMonthDisplay: `${dealMonth}월`,
           dealDate: `${dealYear}.${dealMonth}.${dealDay}`
         };
       });
 
       setRealTrades(formattedData);
-      setStatusMessage(`${selectedYear}년도 경매 사건 및 실거래 매물 총 ${formattedData.length}건 분석 완료`);
+      setStatusMessage(`${selectedYear}년도 실제 실거래 매물 총 ${formattedData.length}건 분석 완료`);
     } catch (error) {
       console.error(error);
-      setStatusMessage('백엔드 서버 통신 에러! (서버 깨어남 대기 중)');
+      setStatusMessage('백엔드 서버 통신 에러! (Render 서버 가동 대기 중)');
     } finally {
       setLoading(false);
     }
@@ -206,7 +182,6 @@ function App() {
   const avgRatio = totalCount > 0 ? (filteredData.reduce((acc, cur) => acc + cur.ratio, 0) / totalCount).toFixed(1) : '0';
   const avgProfit = totalCount > 0 ? (filteredData.reduce((acc, cur) => acc + cur.profit, 0) / totalCount / 100000000).toFixed(2) : '0';
 
-  // CSV 다운로드
   const handleExportCSV = () => {
     if (filteredData.length === 0) {
       alert('다운로드할 데이터가 없습니다.');
@@ -251,7 +226,6 @@ function App() {
 
   return (
     <div className="min-h-screen bg-[#090d16] text-slate-100 p-4 md:p-8 font-sans">
-      {/* 헤더 */}
       <header className="mb-6 pb-4 border-b border-slate-800 flex flex-wrap justify-between items-center gap-4">
         <div className="flex items-center gap-3">
           <div className="bg-blue-600 p-2.5 rounded-xl shadow-lg shadow-blue-600/30">
@@ -269,7 +243,6 @@ function App() {
         </div>
       </header>
 
-      {/* 요약 대시보드 */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <div className="bg-[#111827] p-4 rounded-xl border border-slate-800 flex justify-between items-center">
           <div>
@@ -296,7 +269,6 @@ function App() {
         </div>
       </div>
 
-      {/* 필터 바 */}
       <div className="bg-[#111827] p-5 rounded-2xl border border-slate-800 mb-6 shadow-xl">
         <div className="flex items-center gap-2 mb-4">
           <Filter className="w-4 h-4 text-amber-400" />
@@ -337,7 +309,6 @@ function App() {
             </select>
           </div>
 
-          {/* 💡 년도 드롭다운 선택 */}
           <div>
             <label className="text-xs text-slate-400 block mb-1.5 font-medium flex items-center gap-1">
               <Calendar className="w-3.5 h-3.5 text-blue-400" />
@@ -384,7 +355,6 @@ function App() {
         </div>
       </div>
 
-      {/* 매물 리스트 바 */}
       <div className="bg-[#111827] rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
         <div className="p-4 border-b border-slate-800 flex flex-wrap justify-between items-center gap-3">
           <h3 className="text-sm font-bold text-slate-200">
@@ -426,7 +396,6 @@ function App() {
                     className="hover:bg-slate-800/50 cursor-pointer transition"
                   >
                     <td className="py-3.5 px-4 font-bold text-amber-400">{item.caseNo}</td>
-                    {/* 💡 거래 연월(월 단위) 표시 */}
                     <td className="py-3.5 px-4 text-center font-bold text-sky-400 bg-slate-900/40 rounded-md">
                       {item.dealMonthDisplay}
                     </td>
@@ -462,7 +431,6 @@ function App() {
         )}
       </div>
 
-      {/* 상세 보기 모달 */}
       {selectedItem && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-[#111827] border border-slate-800 rounded-2xl p-6 max-w-lg w-full shadow-2xl relative max-h-[90vh] overflow-y-auto">
